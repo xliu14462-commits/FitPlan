@@ -6,28 +6,34 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: reactnativecommunity/react-native-android:latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build APK
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "JAVA_HOME=$JAVA_HOME"
+          ANDROID_HOME=$HOME/android-sdk
+
+          # 1. Android SDK
+          curl -o /tmp/sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          unzip -q /tmp/sdk.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+          # 2. Gradle
+          curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/
+
+          # 3. Build APK
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          # The image has gradle wrapper setup, or use system gradle
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
-          elif command -v gradle &> /dev/null; then
-            gradle assembleDebug --no-daemon --stacktrace
-          else
-            echo "No gradle found, downloading..."
-            curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.5-bin.zip
-            unzip -q /tmp/gradle.zip -d /tmp/
-            /tmp/gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
-          fi
+          /tmp/gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
