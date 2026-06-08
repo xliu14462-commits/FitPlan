@@ -13,12 +13,12 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Build APK (all in one)
+      - name: Build APK
         run: |
-          # ---- 1. Install Android SDK ----
+          # Install Android SDK
           curl -o /tmp/sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           mkdir -p $HOME/android-sdk/cmdline-tools
           unzip -q /tmp/sdk.zip -d $HOME/android-sdk/cmdline-tools
@@ -28,16 +28,15 @@ jobs:
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
-          # ---- 2. Install Gradle ----
+          # Install Gradle
           curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q /tmp/gradle.zip -d /tmp/
 
-          # ---- 3. Build ----
+          # Build APK
           cd android
           /tmp/gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: FitPlan-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
