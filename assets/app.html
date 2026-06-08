@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>FitPlan</title>
+<style>
+:root {
+  --c-primary: #F97316;--c-accent: #22C55E;
+  --c-bg: #F5F5F7;--c-surface: #FFFFFF;
+  --c-text: #1C1C1E;--c-text-2: rgba(28,28,30,0.55);
+  --c-text-3: rgba(28,28,30,0.30);--c-border: #E5E5EA;
+  --c-border-light: rgba(0,0,0,0.06);
+  --font-display: 'Barlow Condensed','Noto Sans SC',sans-serif;
+  --font-body: 'Barlow','Noto Sans SC',sans-serif;
+  --font-mono: 'SF Mono',monospace;
+  --ease: cubic-bezier(0.16,1,0.3,1);
+  --fast:150ms;--norm:250ms;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:var(--font-body);background:var(--c-bg);color:var(--c-text);
+  display:flex;flex-direction:column;
+  user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* Background layer */
+.bg-layer{
+  position:fixed;inset:0;z-index:0;
+  background:var(--c-bg);background-size:cover;background-position:center;
+  transition:filter 0.6s var(--ease);
+}
+.bg-layer.bl-1{filter:blur(2px);}.bg-layer.bl-2{filter:blur(6px);}
+.bg-layer.bl-3{filter:blur(14px);}.bg-layer.bl-4{filter:blur(24px);}
+
+/* Status bar spacer */
+.safe-top{height:env(safe-area-inset-top,48px);flex-shrink:0;position:relative;z-index:2;}
+.status-row{
+  display:flex;justify-content:space-between;padding:12px 20px 4px;
+  font-size:11px;font-weight:600;color:var(--c-text-2);
+  position:relative;z-index:2;
+}
+
+/* App shell */
+.app{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* Screens */
+.scr{display:none;flex:1;flex-direction:column;overflow-y:auto;padding:0 16px 10px;animation:si var(--norm) var(--ease);}
+.scr.on{display:flex;}
+@keyframes si{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Cards */
+.card{
+  background:var(--c-surface);border-radius:16px;border:1px solid var(--c-border-light);
+  padding:18px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.03);
+}
+.card.accent{border-color:rgba(34,197,94,0.2);background:rgba(34,197,94,0.02);}
+
+/* Greeting */
+.greet{margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;}
+.greet h2{font-family:var(--font-display);font-size:28px;font-weight:800;color:var(--c-text);text-transform:uppercase;line-height:1.1;letter-spacing:-0.3px;}
+.greet h2 em{font-style:normal;color:var(--c-accent);}
+.greet .date-s{font-size:11px;color:var(--c-text-2);margin-top:2px;}
+
+/* Stats */
+.stats{display:flex;gap:8px;margin-bottom:14px;}
+.st{
+  flex:1;background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border-light);
+  padding:12px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.02);
+}
+.st .v{font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--c-text);line-height:1;}
+.st .v.fire{color:var(--c-primary);}.st .v.grn{color:var(--c-accent);}
+.st .l{font-size:9px;color:var(--c-text-2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-top:3px;}
+
+/* Calendar */
+.cal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.cal-m{font-family:var(--font-display);font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:1px;}
+.cal-nav{display:flex;gap:4px;}
+.cal-nav button{width:30px;height:30px;border-radius:50%;background:var(--c-surface);border:1px solid var(--c-border);color:var(--c-text);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.cal-nav button:active{background:var(--c-border);}
+.cal-w{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:9px;color:var(--c-text-3);font-weight:700;margin-bottom:3px;}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-d{aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--c-text-2);cursor:pointer;transition:all var(--fast) var(--ease);position:relative;}
+.cal-d:active{transform:scale(0.9);}
+.cal-d.other{color:var(--c-text-3);}
+.cal-d.today{color:var(--c-primary);font-weight:700;}
+.cal-d.sel{background:var(--c-accent);color:#fff;font-weight:700;}
+.cal-d.pln::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:var(--c-accent);}
+.cal-d.sel.pln::after{background:#fff;}
+
+/* Day desc */
+.dd{text-align:center;padding:14px 0;}
+.dd .icon{font-size:42px;margin-bottom:6px;}
+.dd .title{font-family:var(--font-display);font-size:22px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;}
+.dd .sub{font-size:12px;color:var(--c-text-2);margin-top:4px;line-height:1.5;}
+.dd .bp{display:inline-block;margin-top:6px;padding:5px 12px;border-radius:20px;background:rgba(249,115,22,0.1);color:var(--c-primary);font-size:11px;font-weight:700;}
+
+/* Plans */
+.date-sel{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.date-sel select{
+  flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--c-border);
+  background:var(--c-surface);font-family:var(--font-body);font-size:14px;font-weight:600;color:var(--c-text);
+  outline:none;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M6 9l6-6' stroke='%23999' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;
+}
+
+.ex-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--c-border-light);}
+.ex-row:last-child{border-bottom:none;}
+.ex-n{width:28px;height:28px;border-radius:50%;background:var(--c-border-light);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--c-text-2);flex-shrink:0;}
+.ex-inf{flex:1;min-width:0;}
+.ex-inf .name{font-size:13px;font-weight:600;}
+.ex-inf .meta{font-size:10px;color:var(--c-text-2);margin-top:2px;display:flex;gap:10px;}
+.ex-act{display:flex;gap:2px;}
+.ex-act button{width:24px;height:24px;border-radius:50%;background:var(--c-border-light);border:none;color:var(--c-text-2);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.ex-act button:active{background:var(--c-border);color:var(--c-text);}
+.add-ex{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;margin-top:8px;border:1px dashed var(--c-border);border-radius:10px;color:var(--c-text-3);font-size:12px;font-weight:600;cursor:pointer;}
+.add-ex:active{background:var(--c-border-light);}
+
+/* Workout */
+.wo-v{display:none;flex:1;flex-direction:column;}
+.wo-v.on{display:flex;}
+.wo-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 0;}
+.wo-phase{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;}
+.wo-clk{font-family:var(--font-mono);font-size:80px;font-weight:200;color:var(--c-text);line-height:1;letter-spacing:2px;}
+.wo-clk.resting{color:var(--c-primary);}
+.wo-ci{font-size:13px;color:var(--c-text-2);margin-top:2px;}
+.wo-en{font-family:var(--font-display);font-size:24px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px;}
+.wo-ed{font-size:12px;color:var(--c-text-2);margin-top:2px;}
+
+.wo-prog{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.wo-pb{flex:1;height:4px;background:var(--c-border-light);border-radius:2px;overflow:hidden;}
+.wo-pf{height:100%;background:var(--c-accent);border-radius:2px;transition:width 0.5s var(--ease);}
+.wo-pt{font-size:10px;color:var(--c-text-2);font-weight:600;}
+
+.wo-dots{display:flex;justify-content:center;gap:6px;margin-bottom:14px;}
+.wo-d{width:30px;height:30px;border-radius:50%;background:var(--c-border-light);border:2px solid var(--c-border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--c-text-2);transition:all var(--norm);}
+.wo-d.done{background:var(--c-accent);border-color:var(--c-accent);color:#fff;}
+.wo-d.cur{border-color:var(--c-accent);color:var(--c-accent);box-shadow:0 0 12px rgba(34,197,94,0.2);}
+.wo-br{display:flex;gap:8px;margin-top:6px;}
+.wo-br2{display:flex;gap:8px;margin-top:8px;}
+
+/* Buttons */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px 20px;border-radius:30px;font-family:var(--font-display);
+  font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;
+  border:none;cursor:pointer;transition:all var(--fast) var(--ease);
+}
+.btn:active{transform:scale(0.97);}
+.btn-go{background:var(--c-accent);color:#fff;box-shadow:0 6px 18px rgba(34,197,94,0.22);}
+.btn-out{background:var(--c-surface);color:var(--c-text);border:1px solid var(--c-border);}
+.btn-sm{padding:7px 14px;font-size:12px;}
+.btn-blk{width:100%;}
+.btn-dgr{background:rgba(239,68,68,0.06);color:#EF4444;border:1px solid rgba(239,68,68,0.15);}
+
+/* Bottom nav */
+.btm{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:6px 4px calc(env(safe-area-inset-bottom,20px) + 6px);
+  background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid var(--c-border-light);flex-shrink:0;z-index:10;
+}
+.nav-i{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:none;border:none;color:var(--c-text-2);
+  font-family:var(--font-display);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.5px;
+  cursor:pointer;padding:5px 8px;transition:color var(--fast);
+}
+.nav-i.active{color:var(--c-accent);}
+.nav-i svg{width:20px;height:20px;}
+
+/* Settings */
+.sw-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--c-border-light);}
+.sw-lbl{font-size:13px;font-weight:500;}
+.sw{width:44px;height:26px;border-radius:13px;background:var(--c-border);cursor:pointer;position:relative;transition:background 0.25s;}
+.sw.on{background:var(--c-accent);}
+.sw::after{content:'';width:22px;height:22px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left 0.25s;}
+.sw.on::after{left:20px;}
+.bg-presets{display:flex;gap:8px;flex-wrap:wrap;}
+.bg-ps{
+  width:44px;height:44px;border-radius:10px;border:2px solid transparent;
+  cursor:pointer;transition:all var(--fast);overflow:hidden;
+}
+.bg-ps.on{border-color:var(--c-accent);box-shadow:0 0 12px rgba(34,197,94,0.2);}
+.bg-ps .swatch{width:100%;height:100%;display:block;object-fit:cover;}
+.bg-up{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%;padding:10px;margin-top:8px;border:1px dashed var(--c-border);
+  border-radius:10px;font-size:12px;color:var(--c-accent);font-weight:600;cursor:pointer;
+}
+.bg-up:active{background:rgba(34,197,94,0.06);}
+
+/* Toast */
+.toast{
+  display:none;position:fixed;bottom:120px;left:20px;right:20px;z-index:30;
+  background:var(--c-surface);border:1px solid var(--c-accent);
+  border-radius:10px;padding:10px 14px;font-size:13px;color:var(--c-accent);
+  font-weight:600;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.08);
+  animation:up 0.3s var(--ease);
+}
+.toast.on{display:block;}
+@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* JSON */
+.json-box{width:100%;height:140px;background:var(--c-border-light);border:1px solid var(--c-border);border-radius:10px;color:var(--c-text);font-family:var(--font-mono);font-size:9px;padding:10px;resize:none;outline:none;}
+.json-box:focus{border-color:var(--c-accent);}
+.pars-msg{margin-top:8px;font-size:12px;display:none;}
+
+/* Plan header */
+.plan-t{font-family:var(--font-display);font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+
+/* Hide scrollbar */
+.scr::-webkit-scrollbar{width:0;}
+</style>
+</head>
+<body>
+
+<div class="bg-layer bl-1" id="bgLayer"></div>
+<div class="safe-top"></div>
+<div class="status-row"><span>9:41</span><span>📶 🔋</span></div>
+
+<div class="app">
+
+<!-- ═══ CALENDAR ═══ -->
+<div class="scr on" id="scr-cal">
+  <div class="greet">
+    <div>
+      <div class="date-s" id="todayLabel"></div>
+      <h2>READY TO <em>TRAIN</em>?</h2>
+    </div>
+    <div class="st" style="flex:0 0 auto;min-width:60px;">
+      <div class="v fire" id="streak">15</div>
+      <div class="l">🔥 STREAK</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="cal-h">
+      <span class="cal-m" id="calMonthLabel"></span>
+      <div class="cal-nav">
+        <button onclick="calShift(-1)">‹</button>
+        <button onclick="calShift(1)">›</button>
+      </div>
+    </div>
+    <div class="cal-w"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+    <div class="cal-g" id="calGrid"></div>
+  </div>
+  <div class="card accent">
+    <div class="dd" id="dayDescContent"></div>
+  </div>
+</div>
+
+<!-- ═══ PLANS ═══ -->
+<div class="scr" id="scr-plan">
+  <!-- Plan view -->
+  <div id="planView">
+    <div class="date-sel">
+      <select id="planDateSelect" onchange="onPlanDateChange()"></select>
+    </div>
+    <div class="card">
+      <div class="plan-t" id="planViewTitle"></div>
+      <div id="planViewExs"></div>
+      <div class="add-ex" onclick="addExToPlan()">+ 添加动作</div>
+      <button class="btn btn-go btn-blk" style="margin-top:14px;" onclick="startWorkout()">▶ 开始训练</button>
+    </div>
+  </div>
+
+  <!-- Workout view -->
+  <div class="wo-v" id="woView">
+    <button class="btn btn-out btn-sm" style="align-self:flex-start;margin-bottom:8px;" onclick="stopWorkout()">← 返回</button>
+    <div class="wo-area">
+      <div class="wo-phase" id="woPhase">训练中</div>
+      <div class="wo-clk" id="woClock">00:00</div>
+      <div class="wo-ci" id="woClockInfo"></div>
+      <div class="wo-en" id="woExName"></div>
+      <div class="wo-ed" id="woExDetail"></div>
+    </div>
+    <div class="wo-prog">
+      <div class="wo-pb"><div class="wo-pf" id="woProgFill" style="width:0%"></div></div>
+      <div class="wo-pt" id="woProgText">0/0</div>
+    </div>
+    <div class="wo-dots" id="woSetDots"></div>
+    <div class="wo-br">
+      <button class="btn btn-go btn-blk" id="woMainBtn" onclick="woMainAction()">完成本组</button>
+    </div>
+    <div class="wo-br2">
+      <button class="btn btn-out btn-blk btn-sm" id="woPauseBtn" onclick="togglePause()">⏸ 暂停</button>
+      <button class="btn btn-dgr btn-blk btn-sm" onclick="stopWorkout()">⏹ 结束</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ IMPORT ═══ -->
+<div class="scr" id="scr-import">
+  <h3 style="font-family:var(--font-display);font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">导入 AI 计划</h3>
+  <div class="card">
+    <div style="font-size:12px;color:var(--c-text-2);margin-bottom:10px;">粘贴 AI 生成的 JSON 训练计划，本地解析，无需云端。</div>
+    <textarea class="json-box" id="jsonInput" placeholder='{"planName":"4周增肌计划","weeks":[...]}'></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-go btn-sm" style="flex:1;" onclick="parseJSON()">解析</button>
+      <button class="btn btn-out btn-sm" style="flex:1;" onclick="loadSample()">加载示例</button>
+    </div>
+    <div class="pars-msg" id="parseMsg"></div>
+  </div>
+  <div class="card accent" id="previewBox" style="display:none;">
+    <div style="font-size:10px;color:var(--c-accent);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">✓ 解析成功</div>
+    <div id="previewTitle" style="font-family:var(--font-display);font-size:16px;font-weight:800;text-transform:uppercase;"></div>
+    <div id="previewMeta" style="font-size:10px;color:var(--c-text-2);margin-top:3px;"></div>
+    <button class="btn btn-go btn-blk" style="margin-top:10px;" onclick="doImport()">确认导入 →</button>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS ═══ -->
+<div class="scr" id="scr-settings">
+  <h3 style="font-family:var(--font-display);font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">设置</h3>
+  <div class="card">
+    <div style="font-size:10px;color:var(--c-text-2);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">自定义背景</div>
+    <div class="bg-up" onclick="pickBgImage()">📷 上传背景图片</div>
+    <div class="bg-presets" style="margin-top:8px;" id="bgPresets">
+      <div class="bg-ps on" onclick="setBg('default',this)"><div class="swatch" style="background:linear-gradient(135deg,#f5f5f7,#e8e8ed)"></div></div>
+      <div class="bg-ps" onclick="setBg('green',this)"><div class="swatch" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5)"></div></div>
+      <div class="bg-ps" onclick="setBg('warm',this)"><div class="swatch" style="background:linear-gradient(135deg,#fff7ed,#ffedd5)"></div></div>
+      <div class="bg-ps" onclick="setBg('blue',this)"><div class="swatch" style="background:linear-gradient(135deg,#eff6ff,#dbeafe)"></div></div>
+      <div class="bg-ps" onclick="setBg('dark',this)"><div class="swatch" style="background:linear-gradient(135deg,#1f2937,#111827)"></div></div>
+      <div class="bg-ps" id="bgCustomPreset" style="display:none;" onclick="setBg('custom',this)"><img class="swatch" id="bgCustomThumb" src="" alt="custom"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="font-size:10px;color:var(--c-text-2);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">背景模糊</div>
+    <input type="range" min="1" max="4" value="1" oninput="updateBlur(this.value)" style="width:100%;">
+    <div style="text-align:right;font-size:10px;color:var(--c-text-2);margin-top:4px;" id="blurVal">25%</div>
+  </div>
+  <div class="card">
+    <div class="sw-row"><span class="sw-lbl">语音提醒</span><div class="sw on" id="voiceSw" onclick="toggleVoice()"></div></div>
+    <div class="sw-row"><span class="sw-lbl">振动反馈</span><div class="sw on"></div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toastEl"></div>
+
+<!-- Bottom Nav -->
+<div class="btm">
+  <button class="nav-i active" id="nav-cal" onclick="switchTab('cal')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    日历
+  </button>
+  <button class="nav-i" id="nav-plan" onclick="switchTab('plan')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h6v6H4V4zM4 14h6v6H4v-6zM14 4h6v6h-6V4zM14 14h6v6h-6v-6z"/></svg>
+    计划
+  </button>
+  <button class="nav-i" id="nav-import" onclick="switchTab('import')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 16V4h2v12l3.5-3.5 1.42 1.42L12 19.84l-5.92-5.92L7.5 12.5 11 16z"/></svg>
+    导入
+  </button>
+  <button class="nav-i" id="nav-settings" onclick="switchTab('settings')">
+    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    设置
+  </button>
+</div>
+
+</div><!-- .app -->
+
+<!-- Toast -->
+<div class="toast" id="toastEl"></div>
+
+<script>
+// ═══════════ NATIVE BRIDGE ═══════════
+// Sends messages to React Native via postMessage
+function nativeCall(type,payload){
+  if(window.ReactNativeWebView){
+    window.ReactNativeWebView.postMessage(JSON.stringify({type,payload}));
+  }
+}
+
+// Speech wrapper: uses expo-speech via native bridge
+function speak(text){
+  if(!voiceOn) return;
+  nativeCall('speak',{text});
+}
+function stopSpeak(){
+  nativeCall('stopSpeech',{});
+}
+
+// Image picker bridge
+let _imgCallback=null;
+function pickBgImage(){
+  nativeCall('pickImage',{});
+}
+// Called by native reply
+function onImagePicked(dataUrl){
+  if(dataUrl){
+    customBgUrl=dataUrl;
+    document.getElementById('bgCustomThumb').src=customBgUrl;
+    document.getElementById('bgCustomPreset').style.display='block';
+    setBg('custom',document.getElementById('bgCustomPreset'));
+    toast('背景图片已更新');
+  }
+}
+
+// Listen for native replies
+window.addEventListener('message',function(e){
+  try{
+    const d=JSON.parse(e.data);
+    if(d.type==='nativeReply'&&d.id==='pickImage'){
+      if(d.payload&&d.payload.dataUrl) onImagePicked(d.payload.dataUrl);
+    }
+  }catch(_){}
+});
+document.addEventListener('message',function(e){
+  try{
+    const d=JSON.parse(e.data);
+    if(d.type==='nativeReply'&&d.id==='pickImage'){
+      if(d.payload&&d.payload.dataUrl) onImagePicked(d.payload.dataUrl);
+    }
+  }catch(_){}
+});
+
+// ═══════════ DATA ═══════════
+const now=new Date();
+let calY=now.getFullYear(),calM=now.getMonth();
+let selDate=new Date(calY,calM,now.getDate());
+let voiceOn=true;
+
+const planDB={};
+function dk(d){return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();}
+
+const WEEKLY={
+  1:{title:'胸部 + 三头肌',icon:'🏋️',part:'CHEST',desc:'上肢推训练日。以杠铃卧推为核心，配合上斜推举和飞鸟，全面刺激胸大肌。最后以三头下压收尾，强化手臂后侧。',exs:[
+    {name:'杠铃卧推',sets:4,reps:'8-10',weight:'80kg',rest:90},
+    {name:'上斜哑铃推举',sets:4,reps:'10-12',weight:'24kg',rest:75},
+    {name:'绳索飞鸟',sets:3,reps:'12-15',weight:'15kg',rest:60},
+    {name:'三头下压',sets:3,reps:'12-15',weight:'25kg',rest:60}
+  ]},
+  2:{title:'背部 + 二头肌',icon:'🔙',part:'BACK',desc:'上肢拉训练日。引体向上激活背阔肌，杠铃划船增加厚度。哑铃弯举强化肱二头肌。注意保持核心收紧。',exs:[
+    {name:'引体向上',sets:4,reps:'8-10',weight:'自重',rest:90},
+    {name:'杠铃划船',sets:4,reps:'8-10',weight:'60kg',rest:90},
+    {name:'哑铃弯举',sets:3,reps:'12-15',weight:'14kg',rest:60}
+  ]},
+  3:{title:'休息日',icon:'🧘',part:'REST',desc:'恢复日。建议进行轻度拉伸或瑜伽，促进肌肉修复。保持充足睡眠和蛋白质摄入。',exs:[]},
+  4:{title:'腿部 + 肩部',icon:'🦵',part:'LEGS',desc:'下肢 + 肩部训练日。杠铃深蹲是核心动作，注意动作幅度和呼吸节奏。哑铃推举和侧平举打造圆润肩部线条。',exs:[
+    {name:'杠铃深蹲',sets:5,reps:'8-10',weight:'90kg',rest:120},
+    {name:'哑铃推举',sets:4,reps:'10-12',weight:'18kg',rest:75},
+    {name:'侧平举',sets:3,reps:'15-20',weight:'8kg',rest:45},
+    {name:'腿弯举',sets:3,reps:'12-15',weight:'40kg',rest:60}
+  ]},
+  5:{title:'休息日',icon:'🧘',part:'REST',desc:'恢复日。可以在家做一些核心训练或拉伸。保持饮食规律，为明天的全身训练储备能量。',exs:[]},
+  6:{title:'全身 + 核心',icon:'💪',part:'FULL',desc:'全身力量日。硬拉和杠铃推举两个大复合动作，配合核心训练。这是本周强度最高的训练日。',exs:[
+    {name:'硬拉',sets:4,reps:'6-8',weight:'100kg',rest:120},
+    {name:'杠铃推举',sets:4,reps:'8-10',weight:'40kg',rest:90},
+    {name:'平板支撑',sets:3,reps:'45秒',weight:'-',rest:60},
+    {name:'悬垂举腿',sets:3,reps:'12-15',weight:'-',rest:60}
+  ]},
+  0:{title:'休息日',icon:'🧘',part:'REST',desc:'周末休息。回顾本周训练，记录进步。计划下周训练目标。建议做一次全身拉伸。',exs:[]}
+};
+
+function initPlan(d){
+  const k=dk(d);
+  if(!planDB[k]){
+    const src=WEEKLY[d.getDay()]||WEEKLY[0];
+    planDB[k]=JSON.parse(JSON.stringify(src));
+  }
+  return planDB[k];
+}
+
+// ═══════════ TABS ═══════════
+const TABS=['cal','plan','import','settings'];
+const NAVS=['nav-cal','nav-plan','nav-import','nav-settings'];
+let currentTab='cal';
+
+function switchTab(name){
+  if(currentTab==='plan'&&woActive&&!confirm('训练进行中，确定离开吗？'))return;
+  currentTab=name;
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));
+  document.getElementById('scr-'+name).classList.add('on');
+  document.querySelectorAll('.nav-i').forEach(n=>n.classList.remove('active'));
+  const idx=TABS.indexOf(name);
+  if(idx>=0)document.getElementById(NAVS[idx]).classList.add('active');
+  if(name==='cal'){initPlan(selDate);renderCal();renderDayDesc();}
+  if(name==='plan'){initPlan(selDate);renderPlanView();}
+}
+
+// ═══════════ CALENDAR ═══════════
+function renderCal(){
+  document.getElementById('calMonthLabel').textContent=
+    ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'][calM]+' '+calY;
+  const grid=document.getElementById('calGrid');grid.innerHTML='';
+  const first=new Date(calY,calM,1);
+  let sd=first.getDay()-1;if(sd<0)sd=6;
+  const dim=new Date(calY,calM+1,0).getDate();
+  const prevDim=new Date(calY,calM,0).getDate();
+  const todayKey=dk(now);
+  for(let i=sd-1;i>=0;i--)grid.appendChild(cell(prevDim-i,true,false,false,false));
+  for(let d=1;d<=dim;d++){
+    const dt=new Date(calY,calM,d),dk_=dk(dt);
+    const el=cell(d,false,dk_===todayKey,dk_===dk(selDate),!!(planDB[dk_]&&planDB[dk_].exs&&planDB[dk_].exs.length));
+    el.onclick=()=>{selDate=new Date(calY,calM,d);initPlan(selDate);renderCal();renderDayDesc();};
+    grid.appendChild(el);
+  }
+  const total=sd+dim,rem=total%7?7-total%7:0;
+  for(let d=1;d<=rem;d++)grid.appendChild(cell(d,true,false,false,false));
+}
+function cell(n,o,today,sel,hasP){
+  const el=document.createElement('div');el.className='cal-d';el.textContent=n;
+  if(o)el.classList.add('other');if(today)el.classList.add('today');
+  if(sel)el.classList.add('sel');if(hasP)el.classList.add('pln');
+  return el;
+}
+function calShift(dir){calM+=dir;if(calM<0){calM=11;calY--;}if(calM>11){calM=0;calY++;}renderCal();}
+
+function renderDayDesc(){
+  const plan=planDB[dk(selDate)]||initPlan(selDate);
+  const isToday=dk(selDate)===dk(now);
+  document.getElementById('dayDescContent').innerHTML=`
+    <div class="icon">${plan.icon}</div>
+    <div class="title">${isToday?'今日：':''}${plan.title}</div>
+    <div class="sub">${plan.desc||''}</div>
+    <div class="bp">${plan.part||'训练部位'}</div>`;
+}
+
+// ═══════════ PLANS ═══════════
+let planViewDate=new Date(now);
+
+function renderPlanView(){
+  initPlan(planViewDate);
+  const plan=planDB[dk(planViewDate)];
+  const isToday=dk(planViewDate)===dk(now);
+  const sel=document.getElementById('planDateSelect');
+  sel.innerHTML='';
+  for(let i=-3;i<=7;i++){
+    const d=new Date(now);d.setDate(d.getDate()+i);
+    initPlan(d);
+    const p=planDB[dk(d)];
+    const opt=document.createElement('option');
+    opt.value=dk(d);
+    const ds=['日','一','二','三','四','五','六'];
+    opt.textContent=d.getMonth()+1+'/'+d.getDate()+' 周'+ds[d.getDay()]+' — '+p.title;
+    if(dk(d)===dk(planViewDate))opt.selected=true;
+    sel.appendChild(opt);
+  }
+  document.getElementById('planViewTitle').textContent=(isToday?'今日计划：':'计划：')+plan.title;
+  const cont=document.getElementById('planViewExs');cont.innerHTML='';
+  if(!plan.exs||!plan.exs.length){
+    cont.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:var(--c-text-2);">🧘 休息日，无训练计划</div>';
+  }else{
+    plan.exs.forEach((ex,i)=>{
+      const row=document.createElement('div');row.className='ex-row';
+      row.innerHTML=`
+        <div class="ex-n">${i+1}</div>
+        <div class="ex-inf">
+          <div class="name" contenteditable="true" data-i="${i}" data-f="name">${ex.name}</div>
+          <div class="meta"><span>${ex.sets}组</span><span>${ex.reps}次</span><span>${ex.weight}</span><span>休${ex.rest}s</span></div>
+        </div>
+        <div class="ex-act">
+          <button onclick="movePEx(${i},-1)">▲</button>
+          <button onclick="movePEx(${i},1)">▼</button>
+          <button onclick="delPEx(${i})" style="color:#EF4444;">✕</button>
+        </div>`;
+      cont.appendChild(row);
+    });
+    cont.querySelectorAll('.name').forEach(el=>{
+      el.addEventListener('blur',function(){plan.exs[+this.dataset.i].name=this.textContent.trim();});
+    });
+  }
+  document.getElementById('planView').style.display='block';
+  document.getElementById('woView').classList.remove('on');
+}
+
+function onPlanDateChange(){
+  const v=document.getElementById('planDateSelect').value;
+  const parts=v.split('-').map(Number);
+  planViewDate=new Date(parts[0],parts[1],parts[2]);
+  renderPlanView();
+}
+function addExToPlan(){
+  const plan=planDB[dk(planViewDate)];if(!plan.exs)plan.exs=[];
+  plan.exs.push({name:'新动作',sets:3,reps:'10-12',weight:'-',rest:60});
+  renderPlanView();
+}
+function delPEx(i){planDB[dk(planViewDate)].exs.splice(i,1);renderPlanView();}
+function movePEx(i,d){
+  const exs=planDB[dk(planViewDate)].exs;
+  const j=i+d;if(j<0||j>=exs.length)return;
+  [exs[i],exs[j]]=[exs[j],exs[i]];renderPlanView();
+}
+
+// ═══════════ WORKOUT ═══════════
+let woActive=false,woPaused=false,woPlan=null;
+let woCurEx=0,woCurSet=0,woTotalSets=0,woDoneSets=0;
+let clockSec=0,clockInterval=null;
+let restSec=0,clockMode='work';
+
+function startWorkout(){
+  const plan=planDB[dk(planViewDate)];
+  if(!plan.exs||!plan.exs.length){toast('休息日无需训练');return;}
+  woPlan=JSON.parse(JSON.stringify(plan));
+  woCurEx=0;woCurSet=0;
+  woTotalSets=woPlan.exs.reduce((s,e)=>s+e.sets,0);
+  woDoneSets=0;
+  woActive=true;woPaused=false;
+  clockMode='work';clockSec=0;
+  document.getElementById('planView').style.display='none';
+  document.getElementById('woView').classList.add('on');
+  renderWo();startClock();
+  speak('开始训练！'+woPlan.exs[0].name);
+  toast('🔊 开始训练！');
+}
+
+function renderWo(){
+  if(!woPlan)return;
+  const ex=woPlan.exs[woCurEx];
+  document.getElementById('woExName').textContent=ex.name;
+  document.getElementById('woExDetail').textContent=ex.sets+'组 × '+ex.reps+' · '+ex.weight;
+  document.getElementById('woPhase').textContent=clockMode==='rest'?'组间休息':'训练中';
+  const dots=document.getElementById('woSetDots');dots.innerHTML='';
+  for(let s=0;s<ex.sets;s++){
+    const d=document.createElement('div');d.className='wo-d';d.textContent=s+1;
+    if(s<woCurSet)d.classList.add('done');
+    else if(s===woCurSet)d.classList.add('cur');
+    dots.appendChild(d);
+  }
+  const pct=woTotalSets?Math.round(woDoneSets/woTotalSets*100):0;
+  document.getElementById('woProgFill').style.width=pct+'%';
+  document.getElementById('woProgText').textContent=woDoneSets+'/'+woTotalSets+' 组';
+  const mainBtn=document.getElementById('woMainBtn');
+  if(clockMode==='rest'){
+    mainBtn.textContent='跳过休息';mainBtn.className='btn btn-out btn-blk';
+  }else{
+    mainBtn.textContent='✓ 完成第 '+(woCurSet+1)+' 组';
+    mainBtn.className='btn btn-go btn-blk';
+  }
+  updateClock();
+}
+
+function updateClock(){
+  const clk=document.getElementById('woClock');clk.className='wo-clk';
+  if(clockMode==='rest'){
+    clk.classList.add('resting');
+    const m=Math.floor(restSec/60),s=restSec%60;
+    clk.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    document.getElementById('woClockInfo').textContent='休息剩余时间';
+  }else{
+    const m=Math.floor(clockSec/60),s=clockSec%60;
+    clk.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    document.getElementById('woClockInfo').textContent='本组训练时间';
+  }
+}
+
+function startClock(){
+  if(clockInterval)clearInterval(clockInterval);
+  clockInterval=setInterval(()=>{
+    if(woPaused)return;
+    if(clockMode==='rest'){
+      restSec--;
+      updateClock();
+      if(restSec<=3&&restSec>0)speak(String(restSec));
+      if(restSec<=0){
+        clockMode='work';clockSec=0;restSec=0;
+        speak('休息结束，开始训练');
+        toast('🔊 开始下一组！');
+        renderWo();
+      }
+    }else{
+      clockSec++;
+      updateClock();
+    }
+  },1000);
+}
+
+function woMainAction(){
+  if(!woActive||woPaused)return;
+  if(clockMode==='rest'){
+    clockMode='work';clockSec=0;restSec=0;renderWo();return;
+  }
+  const ex=woPlan.exs[woCurEx];
+  woCurSet++;woDoneSets++;
+  if(woCurSet>=ex.sets){
+    speak(ex.name+'完成！');
+    toast('✓ '+ex.name+' 完成');
+    woCurEx++;woCurSet=0;
+    if(woCurEx>=woPlan.exs.length){finishWo();return;}
+    clockMode='rest';restSec=10;clockSec=0;
+    speak('下一个动作：'+woPlan.exs[woCurEx].name);
+    renderWo();
+  }else{
+    clockMode='rest';restSec=ex.rest;clockSec=0;
+    speak('休息'+ex.rest+'秒');
+    renderWo();
+  }
+}
+
+function togglePause(){
+  woPaused=!woPaused;
+  document.getElementById('woPauseBtn').textContent=woPaused?'▶ 继续':'⏸ 暂停';
+  toast(woPaused?'训练已暂停':'训练继续');
+}
+
+function stopWorkout(){
+  if(woActive&&!confirm('确定结束当前训练吗？'))return;
+  finishWo();
+}
+
+function finishWo(){
+  if(woActive){
+    speak('训练结束！辛苦了！');
+    toast('🏆 训练结束！辛苦了！');
+    document.getElementById('streak').textContent=+document.getElementById('streak').textContent+1;
+  }
+  woActive=woPaused=false;
+  if(clockInterval){clearInterval(clockInterval);clockInterval=null;}
+  clockMode='work';clockSec=0;restSec=0;
+  document.getElementById('woView').classList.remove('on');
+  document.getElementById('planView').style.display='block';
+  renderPlanView();
+}
+
+// ═══════════ TOAST ═══════════
+function toast(msg){
+  const t=document.getElementById('toastEl');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(t._tid);t._tid=setTimeout(()=>t.classList.remove('on'),3500);
+}
+
+// ═══════════ VOICE ═══════════
+function toggleVoice(){
+  voiceOn=!voiceOn;
+  document.getElementById('voiceSw').classList.toggle('on',voiceOn);
+}
+
+// ═══════════ BACKGROUND ═══════════
+let customBgUrl=null;
+function setBg(type,el){
+  document.querySelectorAll('.bg-ps').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  const bg=document.getElementById('bgLayer');
+  bg.style.backgroundImage='';bg.style.background='';
+  const styles={
+    default:'#F5F5F7',green:'linear-gradient(135deg,#ecfdf5,#d1fae5)',
+    warm:'linear-gradient(135deg,#fff7ed,#ffedd5)',
+    blue:'linear-gradient(135deg,#eff6ff,#dbeafe)',
+    dark:'#1F2937',custom:''
+  };
+  if(type==='custom'&&customBgUrl){
+    bg.style.backgroundImage='url('+customBgUrl+')';
+    bg.style.backgroundSize='cover';bg.style.backgroundPosition='center';
+  }else{
+    bg.style.background=styles[type]||styles.default;
+  }
+}
+function updateBlur(v){
+  document.getElementById('bgLayer').className='bg-layer bl-'+v;
+  document.getElementById('blurVal').textContent=(v*25)+'%';
+}
+
+// ═══════════ JSON IMPORT ═══════════
+function loadSample(){
+  document.getElementById('jsonInput').value=JSON.stringify({
+    planName:'4周增肌计划',description:'全身增肌训练',difficulty:'intermediate',goal:'gainMuscle',
+    weeks:[{weekNumber:1,days:[
+      {dayOfWeek:1,dayName:'周一：胸+三头',exercises:[
+        {name:'杠铃卧推',sets:4,reps:'8-10',weight:'60kg',restSeconds:90},
+        {name:'上斜哑铃推举',sets:4,reps:'10-12',weight:'20kg',restSeconds:75},
+        {name:'绳索飞鸟',sets:3,reps:'12-15',weight:'15kg',restSeconds:60},
+        {name:'三头下压',sets:3,reps:'12-15',weight:'25kg',restSeconds:60}
+      ]},
+      {dayOfWeek:2,dayName:'周二：背+二头',exercises:[
+        {name:'引体向上',sets:4,reps:'8-10',restSeconds:90},
+        {name:'杠铃划船',sets:4,reps:'8-10',weight:'50kg',restSeconds:90},
+        {name:'哑铃弯举',sets:3,reps:'12-15',weight:'12kg',restSeconds:60}
+      ]}
+    ]}]
+  },null,2);
+}
+function parseJSON(){
+  const msg=document.getElementById('parseMsg'),prev=document.getElementById('previewBox');
+  prev.style.display='none';
+  try{
+    const d=JSON.parse(document.getElementById('jsonInput').value);
+    if(!d.planName)throw new Error('缺少 planName');
+    if(!d.weeks||!Array.isArray(d.weeks)||!d.weeks.length)throw new Error('缺少 weeks');
+    let td=0,te=0;
+    d.weeks.forEach(w=>{if(w.days)w.days.forEach(dd=>{td++;if(dd.exercises)te+=dd.exercises.length;});});
+    msg.style.display='block';msg.style.color='#22C55E';
+    msg.textContent='✓ 解析成功：'+d.weeks.length+'周 · '+td+'天 · '+te+'个动作';
+    document.getElementById('previewTitle').textContent=d.planName;
+    document.getElementById('previewMeta').textContent='难度:'+(d.difficulty||'-')+' · 目标:'+(d.goal||'-');
+    prev.style.display='block';window._imp=d;
+  }catch(e){msg.style.display='block';msg.style.color='#EF4444';msg.textContent='✗ '+e.message;}
+}
+function doImport(){
+  if(!window._imp)return;
+  const d=window._imp;
+  if(d.weeks[0]&&d.weeks[0].days){
+    d.weeks[0].days.forEach((day,i)=>{
+      const dt=new Date(now);dt.setDate(dt.getDate()+i);
+      planDB[dk(dt)]={
+        title:day.dayName||'训练'+i,icon:'🏋️',part:day.bodyPart||'训练部位',
+        desc:day.dayName+' 训练日。共'+(day.exercises||[]).length+'个动作。',
+        exs:(day.exercises||[]).map(e=>({name:e.name,sets:e.sets||3,reps:e.reps||'10-12',weight:e.weight||'-',rest:e.restSeconds||60}))
+      };
+    });
+  }
+  toast('✓ 计划导入成功！');
+  document.getElementById('previewBox').style.display='none';
+  document.getElementById('parseMsg').style.display='none';
+  document.getElementById('jsonInput').value='';
+  selDate=new Date(now);switchTab('cal');renderCal();renderDayDesc();
+}
+
+// ═══════════ INIT ═══════════
+function init(){
+  const ds=['日','一','二','三','四','五','六'];
+  document.getElementById('todayLabel').textContent=
+    now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 · 周'+ds[now.getDay()];
+  initPlan(now);selDate=new Date(now);
+  renderCal();renderDayDesc();renderPlanView();
+}
+init();
+</script>
+</body>
+</html>
