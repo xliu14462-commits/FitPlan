@@ -16,41 +16,25 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Build APK (all in one)
         run: |
-          set -e
-          SDK_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          curl -s -o /tmp/sdk.zip "$SDK_URL"
+          # ---- 1. Install Android SDK ----
+          curl -o /tmp/sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           mkdir -p $HOME/android-sdk/cmdline-tools
           unzip -q /tmp/sdk.zip -d $HOME/android-sdk/cmdline-tools
           mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          echo "--- SDK packages installed ---"
-          ls $HOME/android-sdk/platforms/
-          ls $HOME/android-sdk/build-tools/
-          echo "SDK setup done"
-
-      - name: Setup Gradle
-        run: |
-          set -e
-          cd android
-          GRADLE_VER=8.5
-          curl -s -L -o /tmp/gradle.zip "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip"
-          unzip -q /tmp/gradle.zip -d /tmp/
-          echo "GRADLE_HOME=/tmp/gradle-${GRADLE_VER}" >> $GITHUB_ENV
-          echo "Gradle setup done"
-
-      - name: Build APK
-        run: |
-          set -e
-          # Create local.properties so Gradle finds the SDK
+          export ANDROID_HOME=$HOME/android-sdk
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+          # ---- 2. Install Gradle ----
+          curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/
+
+          # ---- 3. Build ----
           cd android
-          $GRADLE_HOME/bin/gradle assembleDebug --no-daemon --warning-mode all --stacktrace
+          /tmp/gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
