@@ -13,9 +13,21 @@ jobs:
 
       - name: Build APK
         run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "JAVA_HOME=$JAVA_HOME"
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cd android
-          gradle assembleDebug --no-daemon --stacktrace
+          # The image has gradle wrapper setup, or use system gradle
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
+          elif command -v gradle &> /dev/null; then
+            gradle assembleDebug --no-daemon --stacktrace
+          else
+            echo "No gradle found, downloading..."
+            curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.5-bin.zip
+            unzip -q /tmp/gradle.zip -d /tmp/
+            /tmp/gradle-8.5/bin/gradle assembleDebug --no-daemon --stacktrace
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
