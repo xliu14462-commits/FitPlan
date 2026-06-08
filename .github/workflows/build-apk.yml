@@ -3,46 +3,61 @@ name: Build APK
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: ① 拉取代码
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: ② 安装 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup JDK 17
+      - name: ③ 安装 JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
-
-      - name: Install dependencies
+      - name: ④ 安装 npm 依赖
         run: npm ci
 
-      - name: Generate native Android project
+      - name: ⑤ 生成 Android 原生项目
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build APK
+      - name: ⑥ 设置 Android SDK
+        run: |
+          # Download Android command-line tools
+          curl -s -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          unzip -q cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+
+          # Set environment variables
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+
+          # Accept licenses and install required packages
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: ⑦ 编译 APK
         run: |
           cd android
-          ./gradlew assembleRelease
-        env:
-          ANDROID_HOME: ${{ steps.setup-android.outputs.ANDROID_HOME }}
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: ⑧ 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: FitPlan-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
