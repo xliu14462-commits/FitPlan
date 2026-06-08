@@ -12,51 +12,49 @@ jobs:
       - name: ① 拉取代码
         uses: actions/checkout@v4
 
-      - name: ② 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: ③ 安装 JDK 17
+      - name: ② 安装 JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: ④ 安装 npm 依赖
-        run: npm ci
-
-      - name: ⑤ 生成 Android 原生项目
-        run: npx expo prebuild --platform android --no-install
-
-      - name: ⑥ 设置 Android SDK
+      - name: ③ 设置 Android SDK 并编译
         run: |
           # Download Android command-line tools
           curl -s -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           mkdir -p $HOME/android-sdk/cmdline-tools
           unzip -q cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools
           mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-
-          # Set environment variables
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
-          # Accept licenses and install required packages
+          # Accept licenses & install SDK packages
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: ⑦ 编译 APK
-        run: |
+          # Generate gradle wrapper
           cd android
+          mkdir -p gradle/wrapper
+          # Download gradle wrapper jar
+          curl -s -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+          # Create gradlew script
+          cat > gradlew << 'GRADLEW'
+          #!/bin/sh
+          # Gradle wrapper script
+          APP_HOME=$(cd "$(dirname "$0")" && pwd)
+          CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+          export ANDROID_HOME=${ANDROID_HOME:-$HOME/android-sdk}
+          export ANDROID_SDK_ROOT=${ANDROID_HOME}
+          exec java -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+          GRADLEW
           chmod +x gradlew
-          ./gradlew assembleDebug
 
-      - name: ⑧ 上传 APK
+          # Build APK
+          ./gradlew assembleDebug --no-daemon
+
+      - name: ④ 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: FitPlan-APK
